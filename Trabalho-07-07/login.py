@@ -1,14 +1,18 @@
 #projetado em 23/06
 #atualizado dia 30/06
-from flask import Flask, request, render_template, redirect, make_response, url_for
+from flask import Flask, request, render_template, redirect, make_response, url_for, session
+from flask_session import Session
 
 app = Flask(__name__)
+
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_TYPE"] = "filesystem"
+
+Session(app)
 
 users = {"raphael" : "0297",
          "rodrigo": "1546",
          "rogério": "1540"}
-
-counter = 0
 
 @app.route('/')
 def view_form():
@@ -23,7 +27,7 @@ def login():
         if nome in users and users[nome] == senha:
             resposta = make_response(redirect(url_for('home')))
             resposta.set_cookie('username', nome, max_age=60*30)
-            resposta.set_cookie('counter', "0", max_age=60*30)
+            session['counter'] = 0
             return resposta
         else:
             mensagem = "Usuário ou senha inválidos. Tente novamente."
@@ -38,6 +42,7 @@ def set_theme():
     if new_theme != 'light' and new_theme != 'dark':
         new_theme = 'light'
 
+    session['change'] = True
     response = make_response(redirect(url_for('home')))
     response.set_cookie('theme', new_theme, max_age=60*30)
     return response
@@ -48,6 +53,7 @@ def set_category():
     if not initial_category in ['esporte', 'politica', 'musica', 'lazer']:
         initial_category = 'esporte'
 
+    session['change'] = True
     response = make_response(redirect(url_for('home')))
     response.set_cookie('initial_category', initial_category, max_age=60*30)
     return response
@@ -55,8 +61,11 @@ def set_category():
 
 @app.route('/home_page')
 def home():
-    global counter
-    counter += 1
+    if not session.get('change'):
+        session['counter'] = session.get('counter', 0) + 1
+    else:
+        session.pop('change')
+    
     theme = request.cookies.get('theme')
     if theme != 'light' and theme != 'dark':
         theme = 'light'
@@ -65,18 +74,14 @@ def home():
         category = "esporte"
     username = request.cookies.get('username')
     if username:
-        return render_template('home.html', usuario=username, counter=counter, initial_theme=theme, initial_category=category)
+        return render_template('home.html', usuario=username, counter=session.get('counter', 0), initial_theme=theme, initial_category=category)
     return render_template('loginForm.html')
 
 @app.route('/logout', methods=['POST'])   
 def logout():
-    global counter
-    counter = 0
-    resposta = make_response(redirect(url_for('view_form')))
-    if request.method == 'POST':
-        resposta = make_response(redirect(url_for('login')))
-        resposta.set_cookie('username', '', expires=0)
-        resposta.set_cookie('counter', '', expires=0)
+    session.pop('counter', None)
+    resposta = make_response(redirect(url_for('login')))
+    resposta.set_cookie('username', '', expires=0)
     return resposta
 
 if __name__ == '__main__':
